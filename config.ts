@@ -346,6 +346,11 @@ if (typeof argv.allowedpath === 'string') {
 } else if (Array.isArray(argv.allowedpath)) {
   allowedPaths = allowedPaths.concat(argv.allowedpath);
 }
+// Normalise: these arrive verbatim from the command line or environment, while
+// every path they are compared against has been through path.resolve() and
+// fs.realpath(). A trailing separator -- FLOOD_OPTION_ALLOWEDPATH=/data/ -- was
+// enough to make nothing match, and the only symptom was a bare 403.
+allowedPaths = allowedPaths.map((allowedPath) => path.resolve(allowedPath.trim())).filter((p) => p !== '');
 
 const result = configSchema.safeParse({
   baseURI: argv.baseuri,

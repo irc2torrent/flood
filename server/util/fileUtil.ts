@@ -17,6 +17,38 @@ export const fileNotFoundError = () => {
   return error;
 };
 
+/**
+ * Is `candidate` the same path as `allowed`, or inside it?
+ *
+ * Both sides are normalised first. `allowedPaths` arrives verbatim from
+ * `--allowedpath` / `FLOOD_OPTION_ALLOWEDPATH` and is never normalised, while
+ * the candidate has been through `path.resolve()` and `fs.realpath()` — which
+ * strip any trailing separator. A plain `startsWith` therefore rejected a
+ * perfectly good configuration: `FLOOD_OPTION_ALLOWEDPATH=/data/` never matched
+ * the resolved `/data`, and every add returned 403 Permission denied with no
+ * indication why.
+ *
+ * The comparison is also component-wise rather than a raw string prefix, so
+ * permitting `/data` no longer also permits `/database`.
+ */
+export const isPathWithin = (candidate: string | null, allowed: string): boolean => {
+  if (candidate == null) {
+    return false;
+  }
+
+  const normalisedCandidate = path.resolve(candidate);
+  const normalisedAllowed = path.resolve(allowed);
+
+  if (normalisedCandidate === normalisedAllowed) {
+    return true;
+  }
+
+  // path.relative() gives '..'-prefixed output when the candidate sits outside,
+  // and an absolute path when the two share no root at all.
+  const relative = path.relative(normalisedAllowed, normalisedCandidate);
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+};
+
 export const isAllowedPath = (resolvedPath: string) => {
   if (config.allowedPaths == null) {
     return true;
@@ -36,12 +68,7 @@ export const isAllowedPath = (resolvedPath: string) => {
     }
   }
 
-  return config.allowedPaths.some((allowedPath) => {
-    if (realPath?.startsWith(allowedPath)) {
-      return true;
-    }
-    return false;
-  });
+  return config.allowedPaths.some((allowedPath) => isPathWithin(realPath, allowedPath));
 };
 
 export async function isAllowedPathAsync(resolvedPath: string) {
@@ -63,12 +90,7 @@ export async function isAllowedPathAsync(resolvedPath: string) {
     }
   }
 
-  return config.allowedPaths.some((allowedPath) => {
-    if (realPath?.startsWith(allowedPath)) {
-      return true;
-    }
-    return false;
-  });
+  return config.allowedPaths.some((allowedPath) => isPathWithin(realPath, allowedPath));
 }
 
 export async function existAsync(path: string): Promise<boolean> {
